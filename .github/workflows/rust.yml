@@ -1,0 +1,22 @@
+name: Rust
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Solana test-bpf
+      # You may pin to the exact commit or the version.
+      # uses: mrgnlabs/test-bpf-action@a4df080a59e8b0c84f46f0e04ce1481c08adf81d
+      uses: mrgnlabs/test-bpf-action@v0.2
