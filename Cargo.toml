@@ -1,0 +1,22 @@
+[package]
+name = "trade_yard_new"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+no-entrypoint = []
+test-bpf = []
+
+[dependencies]
+solana-program = "1.10.12"
+borsh = "0.9.3"
+spl-token = "3.3.0"
+spl-associated-token-account = "1.0.5"
+
+[dev-dependencies]
+solana-program-test = "1.10.12"
+solana-sdk = "1.10.12"
+pretty_assertions = "1.2.1"
+
+[lib]
+crate-type = ["cdylib", "lib"]
