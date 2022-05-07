@@ -26,6 +26,39 @@ mod tests {
     use solana_program_test::{tokio, BanksClient};
     use solana_sdk::{account::Account, hash::Hash, signature::Keypair, system_program};
 
+    #[test]
+    fn instruction_unpack() {
+        use crate::instruction::{Args, Payload, TradeYardInstruction};
+        use solana_program::program_error::ProgramError;
+
+        let args = Args {
+            lamports: Some(1000000000),
+            metadata_bump: None,
+        };
+
+        let payload = Payload {
+            instruction: 0,
+            args,
+        }
+        .try_to_vec()
+        .unwrap();
+
+        let invalid_payload = Payload {
+            instruction: 3,
+            args,
+        }
+        .try_to_vec()
+        .unwrap();
+
+        let unpacked = TradeYardInstruction::unpack(&payload);
+        let invalid_unpacked = TradeYardInstruction::unpack(&invalid_payload);
+
+        assert_eq!(unpacked, Ok((TradeYardInstruction::Sell, args)));
+        assert_eq!(invalid_unpacked, Err(ProgramError::InvalidInstructionData));
+
+        println!("{:?} {:?}", unpacked, invalid_unpacked);
+    }
+
     async fn program_test_setup() -> (BanksClient, Keypair, Hash, (Keypair, Keypair, Keypair)) {
         use solana_program_test::{processor, ProgramTest};
         use solana_sdk::{
@@ -41,7 +74,7 @@ mod tests {
         };
 
         let mut program_test = ProgramTest::new(
-            "trade_yard_new",
+            "trade_yard",
             crate::id(),
             processor!(crate::processor::instruction_processor),
         );
@@ -139,39 +172,6 @@ mod tests {
         let hash = bank.get_latest_blockhash().await.unwrap();
 
         (bank, payer, hash, (mint, payment, buyer))
-    }
-
-    #[test]
-    fn instruction_unpack() {
-        use crate::instruction::{Args, Payload, TradeYardInstruction};
-        use solana_program::program_error::ProgramError;
-
-        let args = Args {
-            lamports: Some(1000000000),
-            metadata_bump: None,
-        };
-
-        let payload = Payload {
-            instruction: 0,
-            args,
-        }
-        .try_to_vec()
-        .unwrap();
-
-        let invalid_payload = Payload {
-            instruction: 3,
-            args,
-        }
-        .try_to_vec()
-        .unwrap();
-
-        let unpacked = TradeYardInstruction::unpack(&payload);
-        let invalid_unpacked = TradeYardInstruction::unpack(&invalid_payload);
-
-        assert_eq!(unpacked, Ok((TradeYardInstruction::Sell, args)));
-        assert_eq!(invalid_unpacked, Err(ProgramError::InvalidInstructionData));
-
-        println!("{:?} {:?}", unpacked, invalid_unpacked);
     }
 
     #[tokio::test]
