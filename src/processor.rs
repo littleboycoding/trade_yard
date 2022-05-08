@@ -32,8 +32,8 @@ pub fn instruction_processor(
 
     Ok(match instruction {
         TradeYardInstruction::Sell => sell(program_id, accounts, args)?,
-        TradeYardInstruction::Buy => buy(program_id, accounts, args)?,
-        TradeYardInstruction::Cancel => cancel(program_id, accounts, args)?,
+        TradeYardInstruction::Buy => buy(program_id, accounts)?,
+        TradeYardInstruction::Cancel => cancel(program_id, accounts)?,
     })
 }
 
@@ -72,7 +72,6 @@ fn sell(program_id: &Pubkey, accounts: &[AccountInfo], args: Args) -> ProgramRes
         return Err(ProgramError::InvalidAccountData);
     }
 
-    msg!("{:?}", payment_token);
     // Validate payment token
     Account::unpack(*payment_token.data.borrow())?;
 
@@ -81,9 +80,9 @@ fn sell(program_id: &Pubkey, accounts: &[AccountInfo], args: Args) -> ProgramRes
     let metadata = ItemMetadata {
         seller: seller.key.clone(),
         mint: mint.key.clone(),
-        payment_token: payment_token.key.clone(),
         lamports: args.lamports.unwrap(),
-        program_wallet: item.key.clone(),
+        payment: payment_token.key.clone(),
+        item: item.key.clone(),
     };
 
     let space = metadata.try_to_vec().unwrap().len();
@@ -109,7 +108,7 @@ fn sell(program_id: &Pubkey, accounts: &[AccountInfo], args: Args) -> ProgramRes
     metadata.serialize(&mut *item_metadata.data.borrow_mut())?;
 
     msg!(
-        "Mint {} sold !, metadata can is created at {}",
+        "Mint {} sold !, metadata is created at {}",
         mint.key,
         item_metadata.key
     );
@@ -117,7 +116,7 @@ fn sell(program_id: &Pubkey, accounts: &[AccountInfo], args: Args) -> ProgramRes
     Ok(())
 }
 
-fn buy(program_id: &Pubkey, accounts: &[AccountInfo], _args: Args) -> ProgramResult {
+fn buy(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     msg!("Buy instruction");
     let accounts_info_iter = &mut accounts.iter();
 
@@ -129,7 +128,6 @@ fn buy(program_id: &Pubkey, accounts: &[AccountInfo], _args: Args) -> ProgramRes
     let metadata = next_account_info(accounts_info_iter)?;
     let spl_token = next_account_info(accounts_info_iter)?;
     let item = next_account_info(accounts_info_iter)?;
-    // let _mint = next_account_info(accounts_info_iter)?;
 
     if metadata.owner != program_id {
         return Err(ProgramError::IllegalOwner);
@@ -142,7 +140,7 @@ fn buy(program_id: &Pubkey, accounts: &[AccountInfo], _args: Args) -> ProgramRes
         &transfer(
             spl_token.key,
             buyer_wallet.key,
-            &metadata_data.payment_token,
+            &metadata_data.payment,
             buyer.key,
             &[],
             metadata_data.lamports,
@@ -156,7 +154,7 @@ fn buy(program_id: &Pubkey, accounts: &[AccountInfo], _args: Args) -> ProgramRes
     invoke_signed(
         &transfer(
             spl_token.key,
-            &metadata_data.program_wallet,
+            &metadata_data.item,
             buyer_receive_wallet.key,
             &item_addr,
             &[],
@@ -184,7 +182,7 @@ fn buy(program_id: &Pubkey, accounts: &[AccountInfo], _args: Args) -> ProgramRes
     Ok(())
 }
 
-fn cancel(program_id: &Pubkey, accounts: &[AccountInfo], _args: Args) -> ProgramResult {
+fn cancel(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     let accounts_info_iter = &mut accounts.iter();
 
     let seller = next_account_info(accounts_info_iter)?;
@@ -214,7 +212,7 @@ fn cancel(program_id: &Pubkey, accounts: &[AccountInfo], _args: Args) -> Program
     invoke_signed(
         &transfer(
             spl_token.key,
-            &metadata_data.program_wallet,
+            &metadata_data.item,
             seller_wallet.key,
             &item_addr,
             &[],

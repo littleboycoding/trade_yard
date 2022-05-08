@@ -55,8 +55,6 @@ mod tests {
 
         assert_eq!(unpacked, Ok((TradeYardInstruction::Sell, args)));
         assert_eq!(invalid_unpacked, Err(ProgramError::InvalidInstructionData));
-
-        println!("{:?} {:?}", unpacked, invalid_unpacked);
     }
 
     async fn program_test_setup() -> (BanksClient, Keypair, Hash, (Keypair, Keypair, Keypair)) {
@@ -101,8 +99,8 @@ mod tests {
         let space = Mint::get_packed_len();
         let rent_lamports = rent.minimum_balance(space);
 
-        let payer_nft_wallet = get_associated_token_address(&payer.pubkey(), &mint.pubkey());
-        let buyer_wallet = get_associated_token_address(&buyer.pubkey(), &payment.pubkey());
+        let payer_item_wallet = get_associated_token_address(&payer.pubkey(), &mint.pubkey());
+        let buyer_payment_wallet = get_associated_token_address(&buyer.pubkey(), &payment.pubkey());
 
         let setup_instructions = [
             // Initialize NFT
@@ -119,7 +117,7 @@ mod tests {
             mint_to(
                 &spl_token::id(),
                 &mint.pubkey(),
-                &payer_nft_wallet,
+                &payer_item_wallet,
                 &payer.pubkey(),
                 &[],
                 1,
@@ -155,7 +153,7 @@ mod tests {
             mint_to(
                 &spl_token::id(),
                 &payment.pubkey(),
-                &buyer_wallet,
+                &buyer_payment_wallet,
                 &payer.pubkey(),
                 &[],
                 200000000,
@@ -186,9 +184,10 @@ mod tests {
 
         let (item_addr, _) = &crate::find_item_address(&mint.pubkey());
 
-        let payer_wallet = get_associated_token_address(&payer.pubkey(), &mint.pubkey());
+        let payer_item_wallet = get_associated_token_address(&payer.pubkey(), &mint.pubkey());
         let payer_payment_wallet = get_associated_token_address(&payer.pubkey(), &payment.pubkey());
-        let program_wallet = get_associated_token_address(item_addr, &mint.pubkey());
+
+        let program_item_wallet = get_associated_token_address(item_addr, &mint.pubkey());
 
         let sell_price = 200000000;
 
@@ -196,8 +195,8 @@ mod tests {
             create_associated_token_account(&payer.pubkey(), item_addr, &mint.pubkey()),
             transfer(
                 &spl_token::id(),
-                &payer_wallet,
-                &program_wallet,
+                &payer_item_wallet,
+                &program_item_wallet,
                 &payer.pubkey(),
                 &[],
                 1,
@@ -205,7 +204,7 @@ mod tests {
             .unwrap(),
             crate::instruction::sell(
                 &payer.pubkey(),
-                &program_wallet,
+                &program_item_wallet,
                 &mint.pubkey(),
                 &payer_payment_wallet,
                 sell_price,
@@ -218,22 +217,24 @@ mod tests {
 
         bank.process_transaction(transaction).await.unwrap();
 
-        let item_metadata_pda = crate::find_item_metadata_address(&mint.pubkey());
+        let (item_metadata_addr, _) = crate::find_item_metadata_address(&mint.pubkey());
 
-        let payer_wallet_data: Account = bank.get_packed_account_data(payer_wallet).await.unwrap();
-        let program_wallet_data: Account =
-            bank.get_packed_account_data(program_wallet).await.unwrap();
+        let payer_item_wallet_data: Account = bank.get_packed_account_data(payer_item_wallet).await.unwrap();
+        let program_item_wallet_data: Account =
+            bank.get_packed_account_data(program_item_wallet).await.unwrap();
         let item_metadata_data: crate::state::ItemMetadata = bank
-            .get_account_data_with_borsh(item_metadata_pda.0)
+            .get_account_data_with_borsh(item_metadata_addr)
             .await
             .unwrap();
 
-        assert_eq!(payer_wallet_data.amount, 0);
-        assert_eq!(program_wallet_data.amount, 1);
+        assert_eq!(payer_item_wallet_data.amount, 0);
+        assert_eq!(program_item_wallet_data.amount, 1);
 
         assert_eq!(item_metadata_data.lamports, sell_price);
-        assert_eq!(item_metadata_data.payment_token, payer_payment_wallet);
+        assert_eq!(item_metadata_data.payment, payer_payment_wallet);
         assert_eq!(item_metadata_data.seller, payer.pubkey());
+        assert_eq!(item_metadata_data.item, program_item_wallet);
+        assert_eq!(item_metadata_data.mint, mint.pubkey());
     }
 
     #[tokio::test]
@@ -251,17 +252,17 @@ mod tests {
         let (item_addr, _) = &crate::find_item_address(&mint.pubkey());
         let (item_metadata_addr, _) = crate::find_item_metadata_address(&mint.pubkey());
 
-        let payer_wallet = get_associated_token_address(&payer.pubkey(), &mint.pubkey());
+        let payer_item_wallet = get_associated_token_address(&payer.pubkey(), &mint.pubkey());
         let payer_payment_wallet = get_associated_token_address(&payer.pubkey(), &payment.pubkey());
 
-        let program_wallet = get_associated_token_address(&item_addr, &mint.pubkey());
+        let program_item_wallet = get_associated_token_address(&item_addr, &mint.pubkey());
 
         let sell_instructions = [
             create_associated_token_account(&payer.pubkey(), &item_addr, &mint.pubkey()),
             transfer(
                 &spl_token::id(),
-                &payer_wallet,
-                &program_wallet,
+                &payer_item_wallet,
+                &program_item_wallet,
                 &payer.pubkey(),
                 &[],
                 1,
@@ -269,15 +270,15 @@ mod tests {
             .unwrap(),
             crate::instruction::sell(
                 &payer.pubkey(),
-                &program_wallet,
+                &program_item_wallet,
                 &mint.pubkey(),
                 &payer_payment_wallet,
                 sell_price,
             ),
             crate::instruction::cancel(
                 &payer.pubkey(),
-                &program_wallet,
-                &payer_wallet,
+                &program_item_wallet,
+                &payer_item_wallet,
                 &mint.pubkey(),
             ),
         ];
@@ -288,13 +289,13 @@ mod tests {
 
         bank.process_transaction(transaction).await.unwrap();
 
-        let payer_wallet_data: Account = bank.get_packed_account_data(payer_wallet).await.unwrap();
-        let program_wallet_data: Account =
-            bank.get_packed_account_data(program_wallet).await.unwrap();
+        let payer_item_wallet_data: Account = bank.get_packed_account_data(payer_item_wallet).await.unwrap();
+        let program_item_wallet_data: Account =
+            bank.get_packed_account_data(program_item_wallet).await.unwrap();
         let item_metadata_data = bank.get_account(item_metadata_addr).await.unwrap();
 
-        assert_eq!(payer_wallet_data.amount, 1);
-        assert_eq!(program_wallet_data.amount, 0);
+        assert_eq!(payer_item_wallet_data.amount, 1);
+        assert_eq!(program_item_wallet_data.amount, 0);
 
         assert_eq!(item_metadata_data, None);
     }
@@ -314,20 +315,20 @@ mod tests {
         let (item_addr, _) = &crate::find_item_address(&mint.pubkey());
         let (item_metadata_addr, _) = crate::find_item_metadata_address(&mint.pubkey());
 
-        let payer_wallet = get_associated_token_address(&payer.pubkey(), &mint.pubkey());
+        let payer_item_wallet = get_associated_token_address(&payer.pubkey(), &mint.pubkey());
         let payer_payment_wallet = get_associated_token_address(&payer.pubkey(), &payment.pubkey());
 
-        let buyer_wallet = get_associated_token_address(&buyer.pubkey(), &payment.pubkey());
-        let buyer_receiver_wallet = get_associated_token_address(&buyer.pubkey(), &mint.pubkey());
+        let buyer_item_wallet = get_associated_token_address(&buyer.pubkey(), &mint.pubkey());
+        let buyer_payment_wallet = get_associated_token_address(&buyer.pubkey(), &payment.pubkey());
 
-        let program_wallet = get_associated_token_address(&item_addr, &mint.pubkey());
+        let program_item_wallet = get_associated_token_address(&item_addr, &mint.pubkey());
 
         let sell_instructions = [
             create_associated_token_account(&payer.pubkey(), &item_addr, &mint.pubkey()),
             transfer(
                 &spl_token::id(),
-                &payer_wallet,
-                &program_wallet,
+                &payer_item_wallet,
+                &program_item_wallet,
                 &payer.pubkey(),
                 &[],
                 1,
@@ -335,16 +336,16 @@ mod tests {
             .unwrap(),
             crate::instruction::sell(
                 &payer.pubkey(),
-                &program_wallet,
+                &program_item_wallet,
                 &mint.pubkey(),
                 &payer_payment_wallet,
                 sell_price,
             ),
             crate::instruction::buy(
                 &buyer.pubkey(),
-                &buyer_wallet,
-                &buyer_receiver_wallet,
-                &program_wallet,
+                &buyer_payment_wallet,
+                &buyer_item_wallet,
+                &program_item_wallet,
                 &payer_payment_wallet,
                 &item_metadata_addr,
                 &item_addr,
@@ -357,28 +358,28 @@ mod tests {
 
         bank.process_transaction(transaction).await.unwrap();
 
-        let payer_wallet_data: Account = bank.get_packed_account_data(payer_wallet).await.unwrap();
-        let program_wallet_data: Account =
-            bank.get_packed_account_data(program_wallet).await.unwrap();
-        let buyer_wallet_data: Account = bank
-            .get_packed_account_data(buyer_receiver_wallet)
+        let payer_item_wallet_data: Account = bank.get_packed_account_data(payer_item_wallet).await.unwrap();
+        let program_item_wallet_data: Account =
+            bank.get_packed_account_data(program_item_wallet).await.unwrap();
+        let buyer_item_wallet_data: Account = bank
+            .get_packed_account_data(buyer_item_wallet)
             .await
             .unwrap();
 
-        let payer_nft_data: Account = bank
+        let payer_payment_wallet_data: Account = bank
             .get_packed_account_data(payer_payment_wallet)
             .await
             .unwrap();
-        let buyer_nft_data: Account = bank.get_packed_account_data(buyer_wallet).await.unwrap();
+        let buyer_payment_wallet_data: Account = bank.get_packed_account_data(buyer_payment_wallet).await.unwrap();
 
         let item_metadata_data = bank.get_account(item_metadata_addr).await.unwrap();
 
-        assert_eq!(payer_wallet_data.amount, 0);
-        assert_eq!(program_wallet_data.amount, 0);
-        assert_eq!(buyer_wallet_data.amount, 1);
+        assert_eq!(payer_item_wallet_data.amount, 0);
+        assert_eq!(program_item_wallet_data.amount, 0);
+        assert_eq!(buyer_item_wallet_data.amount, 1);
 
-        assert_eq!(buyer_nft_data.amount, 0);
-        assert_eq!(payer_nft_data.amount, sell_price);
+        assert_eq!(buyer_payment_wallet_data.amount, 0);
+        assert_eq!(payer_payment_wallet_data.amount, sell_price);
 
         assert_eq!(item_metadata_data, None);
     }
