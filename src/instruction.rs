@@ -44,7 +44,7 @@ pub fn sell(
     seller: &Pubkey,
     program_item_wallet: &Pubkey,
     mint: &Pubkey,
-    payment: &Pubkey,
+    seller_payment_wallet: &Pubkey,
     lamports: u64,
 ) -> Instruction {
     let (item_metadata_addr, item_metadata_bump) = crate::find_item_metadata_address(mint);
@@ -63,7 +63,7 @@ pub fn sell(
             AccountMeta::new_readonly(*program_item_wallet, false),
             AccountMeta::new_readonly(*mint, false),
             AccountMeta::new(item_metadata_addr, false),
-            AccountMeta::new_readonly(*payment, false),
+            AccountMeta::new_readonly(*seller_payment_wallet, false),
             AccountMeta::new_readonly(system_program::id(), false),
         ],
     )
@@ -71,8 +71,8 @@ pub fn sell(
 
 pub fn cancel(
     seller: &Pubkey,
-    program_wallet: &Pubkey,
-    seller_wallet: &Pubkey,
+    program_item_wallet: &Pubkey,
+    seller_item_wallet: &Pubkey,
     mint: &Pubkey
 ) -> Instruction {
     Instruction::new_with_borsh(
@@ -88,8 +88,8 @@ pub fn cancel(
             AccountMeta::new_readonly(*seller, true),
             AccountMeta::new(crate::find_item_metadata_address(mint).0, false),
             AccountMeta::new_readonly(spl_token::id(), false),
-            AccountMeta::new(*program_wallet, false),
-            AccountMeta::new(*seller_wallet, false),
+            AccountMeta::new(*program_item_wallet, false),
+            AccountMeta::new(*seller_item_wallet, false),
             AccountMeta::new_readonly(crate::find_item_address(mint).0, false),
         ],
     )
@@ -97,12 +97,12 @@ pub fn cancel(
 
 pub fn buy(
     buyer: &Pubkey,
-    buyer_wallet: &Pubkey,
-    buyer_receiver_wallet: &Pubkey,
-    program_wallet: &Pubkey,
-    payment_wallet: &Pubkey,
-    metadata: &Pubkey,
-    item: &Pubkey,
+    buyer_payment_wallet: &Pubkey,
+    buyer_item_wallet: &Pubkey,
+    program_item_wallet: &Pubkey,
+    seller_payment_wallet: &Pubkey,
+    item_metadata: &Pubkey,
+    program_item: &Pubkey,
     ) -> Instruction {
     Instruction::new_with_borsh(
         crate::id(),
@@ -115,13 +115,13 @@ pub fn buy(
         },
         vec![
             AccountMeta::new(*buyer, true),
-            AccountMeta::new(*buyer_wallet, false),
-            AccountMeta::new(*buyer_receiver_wallet, false),
-            AccountMeta::new(*program_wallet, false),
-            AccountMeta::new(*payment_wallet, false),
-            AccountMeta::new(*metadata, false),
+            AccountMeta::new(*buyer_payment_wallet, false),
+            AccountMeta::new(*buyer_item_wallet, false),
+            AccountMeta::new(*program_item_wallet, false),
+            AccountMeta::new(*seller_payment_wallet, false),
+            AccountMeta::new(*item_metadata, false),
             AccountMeta::new_readonly(spl_token::id(), false),
-            AccountMeta::new_readonly(*item, false),
+            AccountMeta::new_readonly(*program_item, false),
         ],
     )
 }
