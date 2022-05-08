@@ -63,8 +63,9 @@ fn sell(program_id: &Pubkey, accounts: &[AccountInfo], args: Args) -> ProgramRes
 
     // Verify transfered token
     if {
+        let (item_addr, _) = crate::find_item_address(mint.key);
         let data = Account::unpack(*program_item_wallet.data.borrow())?;
-        data.owner != crate::find_item_address(mint.key).0
+        data.owner != item_addr
             || data.amount != 1
             || data.mint != *mint.key
             || !data.is_initialized()
@@ -73,7 +74,12 @@ fn sell(program_id: &Pubkey, accounts: &[AccountInfo], args: Args) -> ProgramRes
     }
 
     // Validate payment token
-    Account::unpack(*seller_payment_wallet.data.borrow())?;
+    if {
+        let data = Account::unpack(*seller_payment_wallet.data.borrow())?;
+        !data.is_initialized()
+    } {
+        return Err(ProgramError::UninitializedAccount);
+    }
 
     let rent = Rent::get()?;
 
@@ -124,7 +130,7 @@ fn buy(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     let buyer_payment_wallet = next_account_info(accounts_info_iter)?;
     let buyer_item_wallet = next_account_info(accounts_info_iter)?;
     let program_item_wallet = next_account_info(accounts_info_iter)?;
-    let payment_wallet = next_account_info(accounts_info_iter)?;
+    let seller_payment_wallet = next_account_info(accounts_info_iter)?;
     let item_metadata = next_account_info(accounts_info_iter)?;
     let spl_token = next_account_info(accounts_info_iter)?;
     let program_item = next_account_info(accounts_info_iter)?;
@@ -145,7 +151,11 @@ fn buy(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
             &[],
             metadata_data.lamports,
         )?,
-        &[buyer_payment_wallet.clone(), payment_wallet.clone(), buyer.clone()],
+        &[
+            buyer_payment_wallet.clone(),
+            seller_payment_wallet.clone(),
+            buyer.clone(),
+        ],
     )?;
 
     let (item_addr, item_bump) = crate::find_item_address(&metadata_data.mint);
@@ -160,14 +170,18 @@ fn buy(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
             &[],
             1,
         )?,
-        &[program_item_wallet.clone(), buyer_item_wallet.clone(), program_item.clone()],
+        &[
+            program_item_wallet.clone(),
+            buyer_item_wallet.clone(),
+            program_item.clone(),
+        ],
         &[&[
             crate::ITEM_SEED,
             &metadata_data.mint.to_bytes(),
             &[item_bump],
         ]],
     )?;
-    //
+
     // Destroy metadata
     let metadata_lamports = item_metadata.lamports();
 
@@ -175,7 +189,6 @@ fn buy(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     **item_metadata.lamports.borrow_mut() = 0;
 
     item_metadata.data.borrow_mut().fill(0);
-
 
     msg!("Bought {}", metadata_data.mint);
 
@@ -218,7 +231,11 @@ fn cancel(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
             &[],
             1,
         )?,
-        &[program_item_wallet.clone(), seller_item_wallet.clone(), program_item.clone()],
+        &[
+            program_item_wallet.clone(),
+            seller_item_wallet.clone(),
+            program_item.clone(),
+        ],
         &[&[
             crate::ITEM_SEED,
             &item_metadata_data.mint.to_bytes(),
