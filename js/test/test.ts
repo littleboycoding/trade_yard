@@ -41,6 +41,8 @@ describe("Trade Yard", () => {
   });
 
   test("Selling", async () => {
+    const SELL_PRICE = 1e9;
+
     const transaction = new Transaction();
 
     transaction.add(
@@ -53,7 +55,8 @@ describe("Trade Yard", () => {
       await createSellInstruction(
         seller.publicKey,
         mint.publicKey,
-        sellerPaymentWallet
+        sellerPaymentWallet,
+        SELL_PRICE
       )
     );
 
@@ -80,10 +83,11 @@ describe("Trade Yard", () => {
     expect(sellerItemWalletBalance).toEqual("0");
     expect(programItemWalletBalance).toEqual("1");
 
-    expect(metadata.mint).toEqual(mint.publicKey);
     expect(metadata.seller).toEqual(seller.publicKey);
-    expect(metadata.item).toEqual(programItemWallet);
+    expect(metadata.mint).toEqual(mint.publicKey);
     expect(metadata.payment).toEqual(sellerPaymentWallet);
+    expect(metadata.item).toEqual(programItemWallet);
+    expect(metadata.lamports.toString()).toEqual(SELL_PRICE.toString());
   });
 
   test.todo("Canceling");

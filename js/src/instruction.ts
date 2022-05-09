@@ -15,7 +15,8 @@ import { findItemAddress, findItemMetadataAddress } from "./utils";
 async function createSellInstruction(
   seller: PublicKey,
   mint: PublicKey,
-  sellerPaymentWallet: PublicKey
+  sellerPaymentWallet: PublicKey,
+  lamports: number
 ) {
   const [itemAddr] = await findItemAddress(mint);
   const [itemMetadataAddr, itemMetadataBump] = await findItemMetadataAddress(
@@ -25,7 +26,7 @@ async function createSellInstruction(
   const payload = new Payload({
     instruction: 0,
     args: new Args({
-      lamports: 1e9,
+      lamports,
       metadata_bump: itemMetadataBump,
     }),
   });

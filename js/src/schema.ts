@@ -1,4 +1,5 @@
 import { PublicKey } from "@solana/web3.js";
+import type BN from "bn.js"
 
 class Payload {
   instruction: number;
@@ -23,13 +24,13 @@ class Args {
 class ItemMetadata {
   seller: PublicKey;
   mint: PublicKey;
-  lamports: number;
+  lamports: BN;
   payment: PublicKey;
   item: PublicKey;
   constructor(data: {
     seller: Uint8Array | PublicKey;
     mint: Uint8Array | PublicKey;
-    lamports: number;
+    lamports: BN;
     payment: Uint8Array | PublicKey;
     item: Uint8Array | PublicKey;
   }) {
