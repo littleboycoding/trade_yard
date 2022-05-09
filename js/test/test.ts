@@ -24,8 +24,6 @@ import { findItemAddress } from "../src/utils";
 const CLUSTER_API = "http://localhost:8899";
 
 describe("Trade Yard", () => {
-  // jest.setTimeout(90000);
-
   let connection: Connection;
 
   let seller: Keypair;
