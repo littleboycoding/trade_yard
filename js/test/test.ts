@@ -3,128 +3,41 @@ import {
   PublicKey,
   Keypair,
   Transaction,
-  SystemProgram,
   sendAndConfirmTransaction,
 } from "@solana/web3.js";
-import {
-  createTransferInstruction,
-  getAssociatedTokenAddress,
-  AuthorityType,
-  createInitializeMintInstruction,
-  createMintToInstruction,
-  MINT_SIZE,
-  getMinimumBalanceForRentExemptMint,
-  createAssociatedTokenAccountInstruction,
-  TOKEN_PROGRAM_ID,
-  createSetAuthorityInstruction,
-} from "@solana/spl-token";
+import { createTransferInstruction } from "@solana/spl-token";
 import { createSellInstruction } from "../src/instruction";
-import { findItemAddress } from "../src/utils";
+import mockSetup from "./mockSetup";
+import { findItemMetadataAddress } from "../src/utils";
+import { deserialize } from "borsh";
+import { ItemMetadata, schema } from "../src/schema";
 
 const CLUSTER_API = "http://localhost:8899";
 
 describe("Trade Yard", () => {
   let connection: Connection;
 
+  // Accounts
   let seller: Keypair;
+
+  // Wallets
   let sellerItemWallet: PublicKey;
   let sellerPaymentWallet: PublicKey;
+  let programItemWallet: PublicKey;
 
+  // SPL-Token
   let mint: Keypair;
   let payment: Keypair;
-
-  let programItemWallet: PublicKey;
 
   beforeAll(() => {
     connection = new Connection(CLUSTER_API, "confirmed");
   });
 
   beforeEach(async () => {
-    seller = new Keypair();
-    mint = new Keypair();
-    payment = new Keypair();
-
-    await connection
-      .requestAirdrop(seller.publicKey, 1e11)
-      .then((sig) => connection.confirmTransaction(sig));
-
-    const [itemAddr] = await findItemAddress(mint.publicKey);
-
-    const MINT_RENT = await getMinimumBalanceForRentExemptMint(connection);
-
-    [sellerItemWallet, sellerPaymentWallet, programItemWallet] =
-      await Promise.all([
-        getAssociatedTokenAddress(mint.publicKey, seller.publicKey),
-        getAssociatedTokenAddress(payment.publicKey, seller.publicKey),
-        getAssociatedTokenAddress(mint.publicKey, itemAddr, true),
-      ]);
-
-    const transaction = new Transaction();
-
-    transaction.add(
-      SystemProgram.createAccount({
-        programId: TOKEN_PROGRAM_ID,
-        space: MINT_SIZE,
-        lamports: MINT_RENT,
-        fromPubkey: seller.publicKey,
-        newAccountPubkey: mint.publicKey,
-      }),
-      SystemProgram.createAccount({
-        programId: TOKEN_PROGRAM_ID,
-        space: MINT_SIZE,
-        lamports: MINT_RENT,
-        fromPubkey: seller.publicKey,
-        newAccountPubkey: payment.publicKey,
-      }),
-      createInitializeMintInstruction(
-        mint.publicKey,
-        0,
-        seller.publicKey,
-        null
-      ),
-      createInitializeMintInstruction(
-        payment.publicKey,
-        9,
-        seller.publicKey,
-        null
-      ),
-      createAssociatedTokenAccountInstruction(
-        seller.publicKey,
-        programItemWallet,
-        itemAddr,
-        mint.publicKey
-      ),
-      createAssociatedTokenAccountInstruction(
-        seller.publicKey,
-        sellerItemWallet,
-        seller.publicKey,
-        mint.publicKey
-      ),
-      createAssociatedTokenAccountInstruction(
-        seller.publicKey,
-        sellerPaymentWallet,
-        seller.publicKey,
-        payment.publicKey
-      ),
-      createMintToInstruction(
-        mint.publicKey,
-        sellerItemWallet,
-        seller.publicKey,
-        1
-      ),
-      createSetAuthorityInstruction(
-        mint.publicKey,
-        seller.publicKey,
-        AuthorityType.MintTokens,
-        null
-      )
-    );
-
-    return sendAndConfirmTransaction(connection, transaction, [
-      seller,
-      mint,
-      payment,
-    ]);
+    [
+      [seller, mint, payment],
+      [sellerItemWallet, sellerPaymentWallet, programItemWallet],
+    ] = await mockSetup(connection);
   });
 
   test("Selling", async () => {
@@ -145,6 +58,32 @@ describe("Trade Yard", () => {
     );
 
     await sendAndConfirmTransaction(connection, transaction, [seller]);
+
+    // Expecting
+    const [sellerItemWalletBalance, programItemWalletBalance] =
+      await Promise.all([
+        connection
+          .getTokenAccountBalance(sellerItemWallet)
+          .then((r) => r.value.amount),
+        connection
+          .getTokenAccountBalance(programItemWallet)
+          .then((r) => r.value.amount),
+      ]);
+
+    const itemMetadataData = await findItemMetadataAddress(mint.publicKey).then(
+      ([addr]) => connection.getAccountInfo(addr)
+    );
+
+    if (!itemMetadataData?.data) throw new Error("No data associated");
+    const metadata = deserialize(schema, ItemMetadata, itemMetadataData.data);
+
+    expect(sellerItemWalletBalance).toEqual("0");
+    expect(programItemWalletBalance).toEqual("1");
+
+    expect(metadata.mint).toEqual(mint.publicKey);
+    expect(metadata.seller).toEqual(seller.publicKey);
+    expect(metadata.item).toEqual(programItemWallet);
+    expect(metadata.payment).toEqual(sellerPaymentWallet);
   });
 
   test.todo("Canceling");
