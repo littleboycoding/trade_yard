@@ -59,7 +59,7 @@ pub fn sell(
             },
         },
         vec![
-            AccountMeta::new(*seller, true),
+            AccountMeta::new_readonly(*seller, true),
             AccountMeta::new_readonly(*program_item_wallet, false),
             AccountMeta::new_readonly(*mint, false),
             AccountMeta::new(item_metadata_addr, false),
