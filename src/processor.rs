@@ -56,7 +56,7 @@ fn sell(program_id: &Pubkey, accounts: &[AccountInfo], args: Args) -> ProgramRes
     // Validate non-fungible-token
     if {
         let data = Mint::unpack(*mint.data.borrow())?;
-        data.mint_authority != COption::None || data.supply != 1 || !data.is_initialized
+        data.mint_authority != COption::None || data.supply != 1 || !data.is_initialized || data.decimals != 0
     } {
         return Err(ProgramError::InvalidAccountData);
     }
