@@ -9,6 +9,9 @@ import { getAssociatedTokenAddress } from "@solana/spl-token";
 import { serialize } from "borsh";
 import { findItemAddress, findItemMetadataAddress } from "./utils";
 
+/**
+ * Create sell instruction
+ */
 async function createSellInstruction(
   seller: PublicKey,
   mint: PublicKey,
@@ -42,7 +45,7 @@ async function createSellInstruction(
       {
         pubkey: seller,
         isSigner: true,
-        isWritable: true,
+        isWritable: false,
       },
       {
         pubkey: programItemWallet,
