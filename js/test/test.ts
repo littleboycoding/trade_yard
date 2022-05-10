@@ -6,7 +6,11 @@ import {
   sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import { createTransferInstruction } from "@solana/spl-token";
-import { createSellInstruction } from "../src/instruction";
+import {
+  createCancelInstruction,
+  createSellInstruction,
+  createBuyInstruction,
+} from "../src/instruction";
 import mockSetup from "./mockSetup";
 import { findItemMetadataAddress } from "../src/utils";
 import { deserialize } from "borsh";
@@ -19,10 +23,13 @@ describe("Trade Yard", () => {
 
   // Accounts
   let seller: Keypair;
+  let buyer: Keypair;
 
   // Wallets
   let sellerItemWallet: PublicKey;
   let sellerPaymentWallet: PublicKey;
+  let buyerItemWallet: PublicKey;
+  let buyerPaymentWallet: PublicKey;
   let programItemWallet: PublicKey;
 
   // SPL-Token
@@ -35,8 +42,14 @@ describe("Trade Yard", () => {
 
   beforeEach(async () => {
     [
-      [seller, mint, payment],
-      [sellerItemWallet, sellerPaymentWallet, programItemWallet],
+      [seller, mint, payment, buyer],
+      [
+        sellerItemWallet,
+        sellerPaymentWallet,
+        buyerItemWallet,
+        buyerPaymentWallet,
+        programItemWallet,
+      ],
     ] = await mockSetup(connection);
   });
 
@@ -90,6 +103,139 @@ describe("Trade Yard", () => {
     expect(metadata.lamports.toString()).toEqual(SELL_PRICE.toString());
   });
 
-  test.todo("Canceling");
-  test.todo("Buying");
+  test("Canceling", async () => {
+    const SELL_PRICE = 1e9;
+
+    // Setup selling item
+    const sellingTransaction = new Transaction();
+
+    sellingTransaction.add(
+      createTransferInstruction(
+        sellerItemWallet,
+        programItemWallet,
+        seller.publicKey,
+        1
+      ),
+      await createSellInstruction(
+        seller.publicKey,
+        mint.publicKey,
+        sellerPaymentWallet,
+        SELL_PRICE
+      )
+    );
+
+    await sendAndConfirmTransaction(connection, sellingTransaction, [seller]);
+
+    // Canceling
+    const cancelingTransaction = new Transaction();
+
+    cancelingTransaction.add(
+      await createCancelInstruction(
+        seller.publicKey,
+        mint.publicKey,
+        sellerItemWallet
+      )
+    );
+
+    await sendAndConfirmTransaction(connection, cancelingTransaction, [seller]);
+
+    const [sellerItemWalletBalance, programItemWalletBalance] =
+      await Promise.all([
+        connection
+          .getTokenAccountBalance(sellerItemWallet)
+          .then((r) => r.value.amount),
+        connection
+          .getTokenAccountBalance(programItemWallet)
+          .then((r) => r.value.amount),
+      ]);
+
+    const [itemMetadataAddr] = await findItemMetadataAddress(
+      mint.publicKey
+    ).then();
+
+    const itemMetadata = await connection.getAccountInfo(itemMetadataAddr);
+
+    expect(sellerItemWalletBalance).toEqual("1");
+    expect(programItemWalletBalance).toEqual("0");
+
+    expect(itemMetadata).toBeNull();
+  });
+
+  test("Buying", async () => {
+    const SELL_PRICE = 1e9;
+
+    // Setup selling item
+    const sellingTransaction = new Transaction();
+
+    sellingTransaction.add(
+      createTransferInstruction(
+        sellerItemWallet,
+        programItemWallet,
+        seller.publicKey,
+        1
+      ),
+      await createSellInstruction(
+        seller.publicKey,
+        mint.publicKey,
+        sellerPaymentWallet,
+        SELL_PRICE
+      )
+    );
+
+    await sendAndConfirmTransaction(connection, sellingTransaction, [seller]);
+
+    // Canceling
+    const buyingTransaction = new Transaction();
+
+    buyingTransaction.add(
+      await createBuyInstruction(
+        buyer.publicKey,
+        buyerPaymentWallet,
+        buyerItemWallet,
+        sellerPaymentWallet,
+        mint.publicKey
+      )
+    );
+
+    await sendAndConfirmTransaction(connection, buyingTransaction, [buyer]);
+
+    const [
+      sellerItemWalletBalance,
+      programItemWalletBalance,
+      buyerItemWalletBalance,
+      sellerPaymentWalletBalance,
+      buyerPaymentWalletBalance,
+    ] = await Promise.all([
+      connection
+        .getTokenAccountBalance(sellerItemWallet)
+        .then((r) => r.value.amount),
+      connection
+        .getTokenAccountBalance(programItemWallet)
+        .then((r) => r.value.amount),
+      connection
+        .getTokenAccountBalance(buyerItemWallet)
+        .then((r) => r.value.amount),
+      connection
+        .getTokenAccountBalance(sellerPaymentWallet)
+        .then((r) => r.value.amount),
+      connection
+        .getTokenAccountBalance(buyerPaymentWallet)
+        .then((r) => r.value.amount),
+    ]);
+
+    const [itemMetadataAddr] = await findItemMetadataAddress(
+      mint.publicKey
+    ).then();
+
+    const itemMetadata = await connection.getAccountInfo(itemMetadataAddr);
+
+    expect(sellerItemWalletBalance).toEqual("0");
+    expect(programItemWalletBalance).toEqual("0");
+    expect(buyerItemWalletBalance).toEqual("1");
+
+    expect(sellerPaymentWalletBalance).toEqual(1e9.toString());
+    expect(buyerPaymentWalletBalance).toEqual("0");
+
+    expect(itemMetadata).toBeNull();
+  });
 });

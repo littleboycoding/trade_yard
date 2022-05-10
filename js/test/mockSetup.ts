@@ -28,21 +28,34 @@ async function mockSetup(
   const seller = new Keypair();
   const mint = new Keypair();
   const payment = new Keypair();
+  const buyer = new Keypair();
 
-  await connection
-    .requestAirdrop(seller.publicKey, 1e11)
-    .then((sig) => connection.confirmTransaction(sig));
+  await Promise.all([
+    connection
+      .requestAirdrop(seller.publicKey, 1e11)
+      .then((sig) => connection.confirmTransaction(sig)),
+    connection
+      .requestAirdrop(buyer.publicKey, 1e11)
+      .then((sig) => connection.confirmTransaction(sig)),
+  ]);
 
   const [itemAddr] = await findItemAddress(mint.publicKey);
 
   const MINT_RENT = await getMinimumBalanceForRentExemptMint(connection);
 
-  const [sellerItemWallet, sellerPaymentWallet, programItemWallet] =
-    await Promise.all([
-      getAssociatedTokenAddress(mint.publicKey, seller.publicKey),
-      getAssociatedTokenAddress(payment.publicKey, seller.publicKey),
-      getAssociatedTokenAddress(mint.publicKey, itemAddr, true),
-    ]);
+  const [
+    sellerItemWallet,
+    sellerPaymentWallet,
+    buyerItemWallet,
+    buyerPaymentWallet,
+    programItemWallet,
+  ] = await Promise.all([
+    getAssociatedTokenAddress(mint.publicKey, seller.publicKey),
+    getAssociatedTokenAddress(payment.publicKey, seller.publicKey),
+    getAssociatedTokenAddress(mint.publicKey, buyer.publicKey),
+    getAssociatedTokenAddress(payment.publicKey, buyer.publicKey),
+    getAssociatedTokenAddress(mint.publicKey, itemAddr, true),
+  ]);
 
   const transaction = new Transaction();
 
@@ -86,11 +99,29 @@ async function mockSetup(
       seller.publicKey,
       payment.publicKey
     ),
+    createAssociatedTokenAccountInstruction(
+      seller.publicKey,
+      buyerItemWallet,
+      buyer.publicKey,
+      mint.publicKey
+    ),
+    createAssociatedTokenAccountInstruction(
+      seller.publicKey,
+      buyerPaymentWallet,
+      buyer.publicKey,
+      payment.publicKey
+    ),
     createMintToInstruction(
       mint.publicKey,
       sellerItemWallet,
       seller.publicKey,
       1
+    ),
+    createMintToInstruction(
+      payment.publicKey,
+      buyerPaymentWallet,
+      seller.publicKey,
+      1e9
     ),
     createSetAuthorityInstruction(
       mint.publicKey,
@@ -107,8 +138,14 @@ async function mockSetup(
   ]);
 
   return [
-    [seller, mint, payment],
-    [sellerItemWallet, sellerPaymentWallet, programItemWallet],
+    [seller, mint, payment, buyer],
+    [
+      sellerItemWallet,
+      sellerPaymentWallet,
+      buyerItemWallet,
+      buyerPaymentWallet,
+      programItemWallet,
+    ],
   ];
 }
 
