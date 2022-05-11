@@ -1,5 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
-import { PROGRAM_ID } from "../src/program";
+import { PROGRAM_ID } from "./program";
+import { Buffer } from "buffer"
 
 function findItemAddress(mint: PublicKey) {
   return PublicKey.findProgramAddress(

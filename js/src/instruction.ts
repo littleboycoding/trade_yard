@@ -8,6 +8,7 @@ import { Args, Payload, schema } from "./schema";
 import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { serialize } from "borsh";
 import { findItemAddress, findItemMetadataAddress } from "./utils";
+import { Buffer } from "buffer"
 
 /**
  * Create sell instruction
