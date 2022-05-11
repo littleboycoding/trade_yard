@@ -5,7 +5,7 @@ pub mod instruction;
 pub mod processor;
 pub mod state;
 
-solana_program::declare_id!("AWjRabt1CjFBSs1JYYKDNULAEyaGih4QUhiK23LC2sXn");
+solana_program::declare_id!("J1XKvUPQhgFkfpQ5fBoGJGBY26Dr6Xfqvo2UasnJAx9S");
 
 pub const ITEM_METADATA_SEED: &[u8] = b"item_metadata";
 pub const ITEM_SEED: &[u8] = b"item";
